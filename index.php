@@ -1,9 +1,12 @@
 <?php
 ini_set('user_agent', 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.9) Gecko/20071025 Firefox/3.7.0.9');
 
+// I set these to the playlist directory from the MPD config.
+// This way MPD will always see the latest radio playlist.
 define('RADIO_FILE', '/net/kyle/musicDocs/radio.m3u');
 define('URL_FILE', '/net/kyle/musicDocs/urls.txt');
 
+// use 'generate' as an are on the command line to recreate the playlist.  Useful for cron jobs.
 if ($argv[1] == 'generate') {
 	echo "Starting to regenerate " . RADIO_FILE;
 	createPlaylist();
@@ -15,6 +18,7 @@ if ($_REQUEST['updatePlaylist']) {
 	updateUrls();
 	createPlaylist();
 
+//Used if you want the webpage to be able to shutdown/restart you MPD machine.
 } elseif (isset($_POST['shutdown'])) {
 	print "Shuttting Down<br/>";
 	print `super shutdown -h now 2>&1`;
@@ -48,6 +52,8 @@ function drawPage() {
 	<tr><th></th><th>Description</th><th>URL</th></tr>
 	<?
 	$lines = file(URL_FILE);
+	
+	// List all the shoutcast URLs.  Create a table row for every line in the URL file.  
 	for ($i=0; $i<count($lines); $i+=2){
 		$disp = $i/2 + 1;
 		?>
@@ -58,6 +64,8 @@ function drawPage() {
 		</tr>
 		<?
 	}
+	
+	// Always add two more empty tables rows to add more Shoutcast URLs
 	for ($i=$disp+1; $i<$disp+3; $i++) {
 		?>
 		<tr><td rowspan='1'><?=$i?></td>
@@ -78,6 +86,7 @@ function drawPage() {
 	<?
 }
 
+// Save the list of Shoutcast URLs from the webpage form to the URL_FILE
 function updateUrls() {
 	$output = "";
 	for ($i=0; $i<count($_REQUEST['names']); $i++) {
@@ -99,14 +108,18 @@ function updateUrls() {
 }
 
 
+// Fetch a playlist of streams from each Shoutcast URL in the URL_FILE
 function createPlaylist() {
 	$playlist = "";
 	$lines = file(URL_FILE);
 	foreach ($lines as $lineNum => $line) {
-		if ($line[0] == '#') { continue; }
+		if ($line[0] == '#') { continue; }  // Skip comment lines
 		$playlistLines = file($line);
 		$url = "";
 
+		// Find the 1st line with IP based stream File#=http://###.###.###.###
+		// Skip over alpha steams File#=server.domain/vertualHost
+		// MPD on my RaspberryPi doesn't seem to play alha stream URLs
 		foreach ($playlistLines as $lNum => $curUrl) {
 			if (preg_match("!File\d=(http://\d+.*)!i", $curUrl, $groups)) {
 				$url = $groups[1];
@@ -122,6 +135,7 @@ function createPlaylist() {
 		}
 	}
 
+	//  Create the playlist file if any streams were fonud.
 	if ($playlist) {
 		if (file_put_contents(RADIO_FILE, $playlist)) {
 			echo "Recreated radio.m3u<br/>\n";
